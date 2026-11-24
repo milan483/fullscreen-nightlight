@@ -1,0 +1,11 @@
+{
+  "KPlugin": {
+    "Id": "fullscreen-nightlight",
+    "Name": "Fullscreen Night Light Inhibitor",
+    "Description": "Temporarily pause Night Light for fullscreen windows",
+    "Version": "0.1.0",
+    "License": "MIT"
+  },
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "code/main.js"
+}
