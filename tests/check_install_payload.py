@@ -1,5 +1,7 @@
 """Verify the generated installation payload without touching user XDG paths."""
+import configparser
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +20,14 @@ with tempfile.TemporaryDirectory(prefix="fullscreen-nightlight-test-") as direct
     install.apply(files)
     assert all(path.read_bytes() == contents for path, contents in files.items())
     unit = next(path for path in files if path.parent.name == "user")
+    activation = next(path for path in files if path.parent.name == "services")
+    config = configparser.ConfigParser(interpolation=None)
+    config.read_string(activation.read_text())
+    section = config["D-BUS Service"]
+    assert section["Name"] == install.NAME
+    assert section["SystemdService"] == install.ID + ".service"
+    helper = next(path for path in files if path.name == "inhibitor.py")
+    assert shlex.split(section["Exec"]) == ["/usr/bin/python3", str(helper)]
     # Offline systemd parser/verification; not a live user-service start.
     subprocess.run(["systemd-analyze", "verify", "--man=no", str(unit)],
                    check=True, timeout=15)

@@ -1,24 +1,77 @@
 # Fullscreen Night Light Inhibitor
 
-KWin 6 JavaScript + Python Gio session-bus helper. Native fullscreen or conservatively detected borderless fullscreen inhibits Night Light globally. No scheduler or brightness changes. Uses a separate D-Bus connection, typed uint32 cookies, a 15s lease and 5s retry/heartbeat. Outputs and ExcludedApps are comma-separated KWin script config values; empty means no restriction. Borderless detection is conservative if maximizeMode is unavailable; occlusion is best effort. No telemetry or network calls.
+A user-local KWin 6 script and Python Gio helper that temporarily inhibits KDE Night Light while an eligible fullscreen window is visible. Native fullscreen and conservative borderless fullscreen detection are supported. Night Light scheduling, temperature and brightness settings are not changed.
 
-## Test
+This is an experimental alpha, targeting CachyOS with KDE Plasma 6 on Wayland. See [version](VERSION), [changelog](CHANGELOG.md) and [compatibility and known limitations](docs/COMPATIBILITY.md) before installing. It is not a general Plasma 6 compatibility guarantee. Inhibition is global across all displays, even when an output filter is configured. No telemetry or runtime network access.
 
-Run `bash tests/verify.sh` from the repository root. See [development prerequisites and CI](docs/DEVELOPMENT.md). D-Bus integration runs against a mock on a private session bus, not the desktop.
+## Requirements
 
-## Install (only after approval)
+- KDE Plasma/KWin 6 Wayland session with Night Light and a user systemd/D-Bus session.
+- System Python at `/usr/bin/python3` with PyGObject (Gio/GLib); D-Bus and systemd utilities.
+- On CachyOS/Arch: `python`, `python-gobject`, `glib2`, `dbus`, `systemd`. No pip packages, Node.js or root needed at runtime. See [installer safety](docs/INSTALLER.md) for supported XDG paths/filesystems.
 
-Run python3 install.py --dry-run, then python3 install.py. Reload user systemd units with systemctl --user daemon-reload and the session bus activation files with busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig. Enable the script in System Settings > Window Management > KWin Scripts; Apply. Verify native fullscreen, restore, minimization and helper failure. No separate service enable is necessary. The installer records files it creates in a private ownership manifest at `$XDG_DATA_HOME/fullscreen-nightlight/ownership.json` (default data home: `~/.local/share`). Disable the script and stop the helper as described below before re-running with the same XDG roots to upgrade unchanged owned files. Safe identical pre-existing files are not adopted; conflicting files, group/world-writable payloads and modified owned files cause a refusal during installation. See [installer safety and recovery](docs/INSTALLER.md).
+## Install
+
+Use the source directory or extract the versioned source archive into a fresh directory. For a distributed archive, obtain its accompanying SHA256SUMS from the trusted distribution channel and run `sha256sum -c SHA256SUMS` before extraction. The checksum detects corruption; it is not a signature. See [release verification](docs/DEVELOPMENT.md#release-candidates).
+
+Run these commands as your desktop user from the source directory, not with sudo:
+
+```sh
+python3 install.py --dry-run
+python3 install.py
+systemctl --user daemon-reload
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
+```
+
+If dry-run reports a conflict, stop and inspect it before installing. Enable **Fullscreen Night Light Inhibitor** in System Settings > Window Management > KWin Scripts and Apply. No separate systemd service enable is required; the helper is D-Bus activated. With Night Light enabled, try a native fullscreen window, restore/minimize it and confirm that Night Light resumes according to its own schedule.
+
+The installer creates an ownership manifest at `$XDG_DATA_HOME/fullscreen-nightlight/ownership.json` (default: `~/.local/share/fullscreen-nightlight/ownership.json`). Retain it. Safe identical pre-existing files are not adopted; conflicting files, unsafe permissions and modified owned files cause a refusal during installation. Stop/disable the extension before upgrading, then rerun installation with the same XDG roots.
+
+## Configuration
+
+Both optional keys are in the `Script-fullscreen-nightlight` group of `kwinrc`. Empty or absent values impose no restriction.
+
+| Key | Meaning |
+| --- | --- |
+| Outputs | Comma-separated KWin output names (case-sensitive); e.g. DP-1. Limits which windows can trigger **global** inhibition. |
+| ExcludedApps | Comma-separated exact resource class or desktop file identifiers (case-insensitive). Not window titles or wildcards. |
+
+To change these keys, disable the script in System Settings and Apply first. Record the previous values (the example uses a sentinel to distinguish absent keys from empty ones); do not replace unrelated KWin settings. Example commands, with identifiers adjusted to your system:
+
+```sh
+kscreen-doctor -o
+kreadconfig6 --file kwinrc --group Script-fullscreen-nightlight --key Outputs --default '<absent>'
+kreadconfig6 --file kwinrc --group Script-fullscreen-nightlight --key ExcludedApps --default '<absent>'
+kwriteconfig6 --notify --file kwinrc --group Script-fullscreen-nightlight --key Outputs DP-1
+kwriteconfig6 --notify --file kwinrc --group Script-fullscreen-nightlight --key ExcludedApps 'example-app,org.example.Other'
+```
+
+Identify application properties using KWin's Debug Console (resourceClass and desktopFileName). Re-enable the script and Apply, then verify the intended fullscreen behavior. To reset either key to its default, disable the script and use the corresponding command, then re-enable:
+
+```sh
+kwriteconfig6 --notify --file kwinrc --group Script-fullscreen-nightlight --key Outputs --delete
+kwriteconfig6 --notify --file kwinrc --group Script-fullscreen-nightlight --key ExcludedApps --delete
+```
+
+These configuration commands are optional and change only this script's keys. The installer itself does not edit KWin configuration. See [troubleshooting](docs/TROUBLESHOOTING.md) if settings do not take effect.
 
 ## Remove
 
-Disable the script in System Settings first; verify unloaded and wait for the lease or stop the user service with systemctl --user stop fullscreen-nightlight.service. Then python3 install.py --uninstall; systemctl --user daemon-reload. Reload D-Bus activation files. Only unchanged manifest-owned files are removed, regardless of the current source version. If an owned file has changed, removal refuses the whole operation and preserves it. Empty directories and an empty ownership manifest may remain. Use the same XDG roots as installation; the installer does not remove legacy untracked files.
+Disable the script in System Settings and Apply before stopping the helper. Then run from the source directory, using the same XDG roots as installation:
 
-## Limitations
+```sh
+systemctl --user stop fullscreen-nightlight.service
+python3 install.py --uninstall
+systemctl --user daemon-reload
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
+```
 
-Per-output color temperature is not supported by KWin's inhibitor. Native fullscreen, borderless heuristics, KDE script timer lifecycle, login persistence and performance need native acceptance testing. Not a release. See [architecture and known gaps](docs/ARCHITECTURE.md) and [initialization issue](https://github.com/milan483/fullscreen-nightlight/issues/1).
+Only unchanged manifest-owned files are removed. If an owned file has changed, removal refuses and preserves it. Empty directories and an empty ownership manifest may remain; legacy untracked files are not removed. Optional script configuration keys are left intact unless you explicitly remove them. See [installer safety and recovery](docs/INSTALLER.md).
 
+## Development
+
+Run `bash tests/verify.sh` from the source directory. D-Bus integration uses a private daemon, not the desktop. See [development and release verification](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md) and [security policy](SECURITY.md).
 
 ## Attribution
 
-This standalone project was informed by [Duskwatch](https://github.com/TroggoMan/duskwatch/tree/9d3818db8790f09bc8d6371b9e5e36dcce089231). The upstream MIT copyright and license notice are retained in LICENSE.
+This standalone project was informed by [Duskwatch](https://github.com/TroggoMan/duskwatch/tree/9d3818db8790f09bc8d6371b9e5e36dcce089231). The upstream MIT copyright and license notice are retained in [LICENSE](LICENSE).
