@@ -209,6 +209,99 @@ class Tests(unittest.TestCase):
             self.apply()
         self.assertFalse(self.p.exists())
 
+    def test_unsafe_identical_unowned_payload_permissions(self):
+        # Each combination starts with an otherwise empty installation.
+        for key in install.destinations(self.data, self.config):
+            for mode in (0o664, 0o646, 0o666):
+                for dry in (True, False):
+                    with self.subTest(key=key, mode=oct(mode), dry=dry), \
+                            tempfile.TemporaryDirectory(dir=self.base) as directory:
+                        base = Path(directory)
+                        with patch.dict(os.environ, XDG_DATA_HOME=str(base / "data"),
+                                        XDG_CONFIG_HOME=str(base / "config")):
+                            paths = install.destinations(*install.roots())
+                            files = install.payload()
+                            target = paths[key]
+                            target.parent.mkdir(parents=True)
+                            target.write_bytes(files[target])
+                            target.chmod(mode)
+                            before = target.stat()
+                            unrelated = target.parent / "unrelated.txt"
+                            unrelated.write_bytes(b"leave alone")
+                            tree = self.tree()
+                            with self.assertRaises(RuntimeError):
+                                install.apply(files, dry=dry)
+                            if dry:
+                                self.assertEqual(tree, self.tree())
+                            self.assertEqual(target.stat().st_ino, before.st_ino)
+                            self.assertEqual(target.stat().st_mode, before.st_mode)
+                            self.assertEqual(target.read_bytes(), files[target])
+                            self.assertEqual(unrelated.read_bytes(), b"leave alone")
+                            self.assertTrue(all(not p.exists() for p in files if p != target))
+                            self.assertFalse((base / "data" / install.ID / install.MANIFEST).exists())
+                            self.assertFalse(list(base.rglob("." + install.ID + "-*")))
+                            # Removal without ownership must leave even an unsafe file alone.
+                            tree = self.tree()
+                            install.apply(files, uninstall=True)
+                            self.assertEqual(tree, self.tree())
+
+    def test_safe_identical_unowned_payload_permissions(self):
+        for mode in (0o600, 0o644):
+            with self.subTest(mode=oct(mode)):
+                self.p.parent.mkdir(parents=True, exist_ok=True)
+                self.p.write_bytes(self.files[self.p])
+                self.p.chmod(mode)
+                before = self.p.stat()
+                tree = self.tree()
+                self.apply(dry=True)
+                self.assertEqual(tree, self.tree())
+                self.apply()
+                self.assertNotIn("helper", self.state()["owned"])
+                self.assertEqual(len(self.state()["owned"]), 4)
+                self.assertEqual(self.p.stat().st_ino, before.st_ino)
+                self.assertEqual(self.p.stat().st_mode, before.st_mode)
+                self.apply(uninstall=True)
+                self.assertEqual(self.p.read_bytes(), self.files[self.p])
+                self.assertEqual(self.p.stat().st_mode, before.st_mode)
+                self.assertTrue(all(not p.exists() for p in self.files if p != self.p))
+                self.assert_clean()
+
+    def test_unsafe_owned_permissions_preserved(self):
+        self.apply()
+        for mode in (0o664, 0o666):
+            self.p.chmod(mode)
+            tree = self.tree()
+            for uninstall in (False, True):
+                for dry in (False, True):
+                    with self.subTest(mode=oct(mode), uninstall=uninstall, dry=dry):
+                        with self.assertRaises(RuntimeError):
+                            self.apply(uninstall=uninstall, dry=dry)
+                        self.assertEqual(tree, self.tree())
+        self.p.chmod(0o644)
+        self.apply(uninstall=True)
+        self.assert_clean()
+
+    def test_recovery_refuses_unsafe_staged_permissions(self):
+        self.apply()
+        before = self.state()
+        upgraded = {p: b"upgrade" + b for p, b in self.files.items()}
+        with patch.object(install, "change_payload", side_effect=Interrupted):
+            with self.assertRaises(Interrupted):
+                install.apply(upgraded)
+        tx = self.state()["transaction"]
+        self.assertEqual(tx["phase"], "prepared")
+        backup = self.p.parent / ("." + install.ID + "-" + tx["id"] + "-helper") / "old"
+        backup.chmod(0o666)
+        tree = self.tree()
+        with self.assertRaises(RuntimeError):
+            self.apply()
+        self.assertEqual(tree, self.tree())
+        backup.chmod(0o644)
+        self.apply()
+        self.assertEqual(before, self.state())
+        self.assertTrue(all(p.read_bytes() == b for p, b in self.files.items()))
+        self.assert_clean()
+
     def test_hardlink_and_fifo_refused(self):
         self.p.parent.mkdir(parents=True)
         outside = self.base / "outside"
