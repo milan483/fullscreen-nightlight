@@ -112,6 +112,8 @@ def read_at(fd, name, links=1, limit=LIMIT):
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
                 or not 1 <= info.st_nlink <= links or info.st_mode & 0o7000):
             raise RuntimeError("Unsafe file (untouched): " + name)
+        if info.st_mode & 0o022:
+            raise RuntimeError("Group/world-writable file (untouched): " + name)
 
     try:
         initial = os.stat(name, dir_fd=fd, follow_symlinks=False)
