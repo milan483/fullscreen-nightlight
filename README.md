@@ -8,11 +8,11 @@ Run `bash tests/verify.sh` from the repository root. See [development prerequisi
 
 ## Install (only after approval)
 
-Run python3 install.py --dry-run, then python3 install.py. Reload user systemd units with systemctl --user daemon-reload and the session bus activation files with busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig. Enable the script in System Settings > Window Management > KWin Scripts; Apply. Verify native fullscreen, restore, minimization and helper failure. No separate service enable is necessary. The installer refuses conflicts and copies exact files, no mutable symlinks. Uninstallation requires the matching source version.
+Run python3 install.py --dry-run, then python3 install.py. Reload user systemd units with systemctl --user daemon-reload and the session bus activation files with busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig. Enable the script in System Settings > Window Management > KWin Scripts; Apply. Verify native fullscreen, restore, minimization and helper failure. No separate service enable is necessary. The installer records files it creates in a private ownership manifest at `$XDG_DATA_HOME/fullscreen-nightlight/ownership.json` (default data home: `~/.local/share`). Disable the script and stop the helper as described below before re-running with the same XDG roots to upgrade unchanged owned files. Identical pre-existing files are not adopted; conflicting or modified owned files cause a refusal. See [installer safety and recovery](docs/INSTALLER.md).
 
 ## Remove
 
-Disable the script in System Settings first; verify unloaded and wait for the lease or stop the user service with systemctl --user stop fullscreen-nightlight.service. Then python3 install.py --uninstall; systemctl --user daemon-reload. Reload D-Bus activation files. Empty directories may remain. Do not remove files modified by the user; installer refuses mismatches.
+Disable the script in System Settings first; verify unloaded and wait for the lease or stop the user service with systemctl --user stop fullscreen-nightlight.service. Then python3 install.py --uninstall; systemctl --user daemon-reload. Reload D-Bus activation files. Only unchanged manifest-owned files are removed, regardless of the current source version. If an owned file has changed, removal refuses the whole operation and preserves it. Empty directories and an empty ownership manifest may remain. Use the same XDG roots as installation; the installer does not remove legacy untracked files.
 
 ## Limitations
 
