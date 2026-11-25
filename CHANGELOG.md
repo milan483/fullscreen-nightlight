@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.2
+
+Corrective alpha candidate.
+
+- Register the KWin package structure so the installed script appears in the normal KWin Scripts list.
+- Add read-only installation validation with `python3 install.py --validate` and a nonzero exit status on failure.
+- Add native package-discovery and upgrade regression coverage, with explicit skips where the KWin package utility is unavailable.
+- Document validation and troubleshooting. Existing fullscreen detection and inhibitor runtime logic are unchanged.
+
+Upgrade from alpha.1 using the normal installer with the same XDG roots after disabling the script and stopping its helper if active. Do not edit installed files or the ownership manifest manually. See [compatibility](docs/COMPATIBILITY.md) for remaining limitations.
+
 ## 0.1.0-alpha.1
 
 Initial experimental alpha candidate. The version identifies the candidate; it does not imply a published release.
