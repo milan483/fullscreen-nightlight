@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -55,6 +56,81 @@ class Tests(unittest.TestCase):
         self.apply(uninstall=True)
         self.assertEqual(tree, self.tree())
         self.assert_clean()
+
+    def test_metadata_package_structure(self):
+        paths = install.destinations(self.data, self.config)
+        metadata = json.loads(self.files[paths["metadata"]])
+        self.assertEqual(metadata["KPackageStructure"], "KWin/Script")
+
+    @unittest.skipUnless(shutil.which("kpackagetool6"), "KWin package utility unavailable")
+    def test_native_package_discovery_upgrade(self):
+        metadata_path = install.destinations(self.data, self.config)["metadata"]
+        legacy = dict(self.files)
+        metadata = json.loads(legacy[metadata_path])
+        del metadata["KPackageStructure"]
+        legacy[metadata_path] = json.dumps(metadata).encode()
+        with patch.dict(os.environ, XDG_CACHE_HOME=str(self.base / "cache")):
+            install.apply(legacy)
+            self.assertFalse(install.package_discoverable())
+            self.assertFalse(install.validate_installation(self.files))
+            self.apply()
+            before = self.tree()
+            self.assertTrue(install.validate_installation(self.files))
+            self.assertEqual(before, self.tree())
+            self.apply(uninstall=True)
+            self.assertFalse(install.package_discoverable())
+
+    def test_validate_complete_read_only(self):
+        self.apply()
+        before = self.tree()
+        with patch("install.package_discoverable", return_value=True):
+            self.assertTrue(install.validate_installation(self.files))
+        self.assertEqual(before, self.tree())
+
+    def test_validate_missing_and_discovery_failure(self):
+        with patch("install.package_discoverable", return_value=False):
+            self.assertFalse(install.validate_installation(self.files))
+        self.assertEqual(self.tree(), {})
+        self.apply()
+        before = self.tree()
+        with patch("install.package_discoverable", return_value=False):
+            self.assertFalse(install.validate_installation(self.files))
+        self.assertEqual(before, self.tree())
+
+    def test_validate_modified_and_unowned(self):
+        self.p.parent.mkdir(parents=True)
+        self.p.write_bytes(self.files[self.p])
+        self.apply()
+        before = self.tree()
+        with patch("install.package_discoverable", return_value=True):
+            self.assertTrue(install.validate_installation(self.files))
+            self.q.write_bytes(b"changed")
+            changed = self.tree()
+            self.assertFalse(install.validate_installation(self.files))
+            self.assertEqual(changed, self.tree())
+        self.assertNotEqual(before, self.tree())
+
+    def test_validate_unsafe_file(self):
+        self.apply()
+        self.p.chmod(0o666)
+        before = self.tree()
+        with patch("install.package_discoverable", return_value=True):
+            with self.assertRaises(RuntimeError):
+                install.validate_installation(self.files)
+        self.assertEqual(before, self.tree())
+
+    def test_package_discovery_requires_exact_id(self):
+        from subprocess import CompletedProcess, TimeoutExpired
+        with patch("install.subprocess.run", return_value=CompletedProcess(
+                [], 0, stdout="Listing KPackageType: KWin/Script\nfullscreen-nightlight-other\n")):
+            self.assertFalse(install.package_discoverable())
+        with patch("install.subprocess.run", return_value=CompletedProcess(
+                [], 0, stdout="Listing KPackageType: KWin/Script\nfullscreen-nightlight\n")):
+            self.assertTrue(install.package_discoverable())
+        with patch("install.subprocess.run", side_effect=FileNotFoundError):
+            self.assertFalse(install.package_discoverable())
+        with patch("install.subprocess.run", side_effect=TimeoutExpired([], 10)):
+            self.assertFalse(install.package_discoverable())
 
     def test_conflict(self):
         self.q.parent.mkdir(parents=True)
