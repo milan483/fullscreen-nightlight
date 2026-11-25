@@ -17,6 +17,10 @@ The initial alpha targets CachyOS, KDE Plasma/KWin 6.8.3, Wayland, with one phys
 | Repeated performance characterization | PARTIAL/deferred (10 of 12 valid intervals) |
 | Physical color convergence | UNVERIFIED; D-Bus state/timing measured instead |
 
+### Alpha.2 installation discovery
+
+The published alpha.1 package omitted the KWin package-structure declaration. Direct D-Bus script loading did not exercise normal package discovery, so the initial native tests missed this defect. [PR #10](https://github.com/milan483/fullscreen-nightlight/pull/10) fixed the metadata and added read-only installation validation. On CachyOS with Plasma/KWin 6.8.3 and KPackage 6.32.0, the corrected payload passed an isolated alpha.1 upgrade test and a live ownership-aware metadata-only correction; the KPackage list and validator passed. The user subsequently confirmed normal activation/fullscreen behavior. This is user-reported functional confirmation, not independent observation of the settings UI or a new full acceptance matrix. The final alpha.2 versioned archive requires its own automated verification.
+
 Other Plasma/KWin 6 releases, other distributions, physical multi-display setups and non-Wayland Plasma sessions are unverified. Plasma 5 and non-KWin compositors are outside the intended scope. Node tests do not verify KWin bindings; private-bus tests do not certify the live user session.
 
 ## Performance evidence
