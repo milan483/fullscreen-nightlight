@@ -8,6 +8,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import uuid
 from pathlib import Path
 import shlex
@@ -466,14 +467,67 @@ def apply(files, uninstall=False, dry=False):
         recover(fd, state, paths)
 
 
+def package_discoverable():
+    """Check the user-local KWin package listing, without loading a script."""
+    try:
+        result = subprocess.run(
+            ["kpackagetool6", "--type", "KWin/Script", "--list"],
+            capture_output=True, text=True, timeout=10,
+            env=dict(os.environ, LC_ALL="C"),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        print("FAIL: KWin discovery could not be checked (kpackagetool6 unavailable or timed out)")
+        return False
+    return result.returncode == 0 and ID in result.stdout.splitlines()
+
+
+def validate_installation(files):
+    """Check installed bytes, ownership records and KWin discovery without repair."""
+    root_pair = roots()
+    paths = destinations(*root_pair)
+    if set(files) != set(paths.values()):
+        raise ValueError("Unexpected payload destinations")
+    ok = True
+    with directory(root_pair[0] / ID) as fd:
+        if fd is not None:
+            private_directory(fd)
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        state = load_state(fd, root_pair, paths)
+        if state["transaction"] is not None:
+            raise RuntimeError("Interrupted transaction; review installer recovery instructions")
+        for key, path in paths.items():
+            current = snapshot(path)
+            expected = hashlib.sha256(files[path]).hexdigest()
+            previous = state["owned"].get(key)
+            if current is None:
+                print("FAIL: missing " + key)
+                ok = False
+            elif current["sha256"] != expected or (previous is not None and current != previous):
+                print("FAIL: modified or different version: " + key)
+                ok = False
+            else:
+                ownership = "owned" if previous is not None else "unowned; preserved"
+                print("PASS: " + key + " (" + ownership + ")")
+    discovered = package_discoverable()
+    print(("PASS" if discovered else "FAIL") + ": KWin package discovery")
+    print("INFO: validation does not enable the script or verify live inhibition.")
+    return ok and discovered
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--uninstall", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--validate", action="store_true",
+                        help="Check installed files and KWin discovery without changes")
     args = parser.parse_args()
+    if args.validate and (args.uninstall or args.dry_run):
+        parser.error("--validate cannot be combined with --uninstall or --dry-run")
     try:
         if os.geteuid() == 0:
             raise RuntimeError("Run as the desktop user, not root")
+        if args.validate:
+            raise SystemExit(0 if validate_installation(payload()) else 1)
         apply(payload(), args.uninstall, args.dry_run)
     except (OSError, ValueError, RuntimeError) as exc:
         parser.exit(1, "Installer: " + str(exc) + "\n")

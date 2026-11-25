@@ -23,6 +23,8 @@ systemctl --user daemon-reload
 busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
 ```
 
+After installation, run `python3 install.py --validate` to check the installed payload and KWin package discovery. This read-only check requires `kpackagetool6` and does not enable the script or test live inhibition. If it fails, review the reported check before proceeding.
+
 If dry-run reports a conflict, stop and inspect it before installing. Enable **Fullscreen Night Light Inhibitor** in System Settings > Window Management > KWin Scripts and Apply. No separate systemd service enable is required; the helper is D-Bus activated. With Night Light enabled, try a native fullscreen window, restore/minimize it and confirm that Night Light resumes according to its own schedule.
 
 The installer creates an ownership manifest at `$XDG_DATA_HOME/fullscreen-nightlight/ownership.json` (default: `~/.local/share/fullscreen-nightlight/ownership.json`). Retain it. Safe identical pre-existing files are not adopted; conflicting files, unsafe permissions and modified owned files cause a refusal during installation. Stop/disable the extension before upgrading, then rerun installation with the same XDG roots.

@@ -4,7 +4,7 @@ Start with the [requirements and installation procedure](../README.md) and [comp
 
 ## Extension does not appear
 
-Confirm a Plasma 6 Wayland session, correct XDG roots and that installation completed without conflict. Reopen System Settings > Window Management > KWin Scripts. Enable the script and Apply. If the installer refused, consult [installer safety](INSTALLER.md); do not force installation or manually delete the ownership manifest.
+Confirm a Plasma 6 Wayland session, correct XDG roots and that installation completed without conflict. Run `python3 install.py --validate` from the matching source version. If KWin package discovery fails, check `kpackagetool6 --type KWin/Script --list`; a direct package lookup is not sufficient to prove the script appears in the settings list. Reopen System Settings > Window Management > KWin Scripts. Enable the script and Apply. If the installer refused, consult [installer safety](INSTALLER.md); do not force installation or manually delete the ownership manifest.
 
 ## Fullscreen does not inhibit Night Light
 
