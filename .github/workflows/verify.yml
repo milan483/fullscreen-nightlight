@@ -13,14 +13,38 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install distribution test dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends python3-gi gir1.2-glib-2.0 dbus-daemon dbus-bin systemd nodejs
-      - name: Verify
+      - name: Build and verify release candidate
         env:
           PYTHON: /usr/bin/python3
-        run: bash tests/verify.sh
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/fullscreen-nightlight-release"
+          "$PYTHON" tools/build_release.py --revision "$GITHUB_SHA" --output-dir "$output"
+          (cd "$output" && sha256sum -c SHA256SUMS)
+          archive=("$output"/fullscreen-nightlight-*.tar.gz)
+          test "${#archive[@]}" -eq 1
+          extraction="$(mktemp -d)"
+          tar -xzf "${archive[0]}" -C "$extraction" --no-same-owner
+          candidate=("$extraction"/fullscreen-nightlight-*)
+          test "${#candidate[@]}" -eq 1
+          test "$(cat "${candidate[0]}/SOURCE_COMMIT")" = "$GITHUB_SHA"
+          cd "${candidate[0]}"
+          bash tests/verify.sh
+          (cd "$output" && sha256sum -c SHA256SUMS)
+      - name: Retain verified candidate (not a release)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/fullscreen-nightlight-release/fullscreen-nightlight-*.tar.gz
+            ${{ runner.temp }}/fullscreen-nightlight-release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

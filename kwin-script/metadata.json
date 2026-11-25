@@ -3,7 +3,7 @@
     "Id": "fullscreen-nightlight",
     "Name": "Fullscreen Night Light Inhibitor",
     "Description": "Temporarily pause Night Light for fullscreen windows",
-    "Version": "0.1.0",
+    "Version": "0.1.0-alpha.1",
     "License": "MIT"
   },
   "X-Plasma-API": "javascript",
