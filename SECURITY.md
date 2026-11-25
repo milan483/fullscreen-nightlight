@@ -4,7 +4,7 @@ This project is experimental alpha software. Only the current alpha is intended 
 
 ## Reporting
 
-If you discover a vulnerability, use GitHub's private vulnerability reporting feature for this repository if it is available. Otherwise contact the repository owner privately and arrange a secure reporting channel before sharing sensitive details. Do not publish credentials, private logs, working exploits or sensitive host information in a public issue. Include the affected version/commit, prerequisites, impact, a minimal safe reproduction and any suggested mitigation.
+If you discover a vulnerability, use [GitHub's private vulnerability reporting feature](https://github.com/milan483/fullscreen-nightlight/security/advisories/new). Otherwise contact the repository owner privately and arrange a secure reporting channel before sharing sensitive details. Do not publish credentials, private logs, working exploits or sensitive host information in a public issue. Include the affected version/commit, prerequisites, impact, a minimal safe reproduction and any suggested mitigation.
 
 ## Boundaries
 
